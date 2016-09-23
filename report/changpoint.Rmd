@@ -10,11 +10,14 @@ knitr::opts_chunk$set(echo = TRUE)
 
 #1 Introductions
 
-In univariate segmented regression models, the independent variable is partitioned into disjoint intervals and separate line segments are fitted to each interval. The boundaries of these intervals are called breakpoints. Segmented regression can be used to model the stock market data with respect to continuous time, and by identifying the breakpoints one can tell when the trend of the stock market starts to change. Most of the current studies focus on developing rigorous statistical methods to fit segmented regression models and identify breakpoints, but an easy-to-use tool to identify and compare breakpoints obtained from multiple segmented regression models is lacking. This analysis is important if one needs to compare the sequential order of breakpoints and test whether one breakpoint is significantly earlier than the other. To address this problem, we aim to develop a systematic method to identify breakpoints in multiple segmented regression models and list the breakpoints in a sequential order. We will also develop a statistical method to compare breakpoints from different segmented regression models.
+Change point analysis has been widely applied to stock market data to detect the occurrence of significant changes in stock prices. Most of the current studies focus on developing rigorous statistical methods to identify change points for an individual stock. However, sometimes one needs to compare change points for multiple stocks to discover whether there is any relationship between the trends of different stocks. An easy-to-use method to identify and compare change points for multiple stocks is lacking. To address this problem, we aim to develop a systematic method to identify change points and their confidence intervals for multiple stocks. The change points will be listed in a sequential order and a statistical method will be developed to determine whether one change point occurs earlier than the other.
 
 
-#2 Dataset
+#2 Data
 
-Simulated data will be used to test the validity of our methods. The methods will then be applied to a set of real stock market data. The data that will be included in this study is the end of day US stock prices (https://www.quandl.com/data/EOD?filterSelection=sample&keyword=)
+Simulated data will be used to test the validity of our methods. The methods will then be applied to a set of real stock market data. The data used in this study is the end of day prices for 30 US stock obtained from Quandl (https://www.quandl.com/data/EOD?filterSelection=sample&keyword=). 
 
+#3 Exploratory Analysis
+Prices for four stocks in 2015.
 
+![Prices for four stocks in 2015.](Stockprice.pdf)
