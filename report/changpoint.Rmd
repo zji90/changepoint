@@ -17,7 +17,19 @@ Change point analysis has been widely applied to stock market data to detect the
 
 Simulated data will be used to test the validity of our methods. The methods will then be applied to a set of real stock market data. The data used in this study is the end of day prices for 30 US stock obtained from Quandl (https://www.quandl.com/data/EOD?filterSelection=sample&keyword=). 
 
-#3 Exploratory Analysis
+#3 Statistical Methods
+
+1. Fit a Generalized Additive Model (GAM, gam function in mgcv R package) with cubic smoothing splines. Perform a likelihood ratio test to determine whether the pattern is significantly different from constant (whether the gam model fits significantly better than a constant line). If the pattern is significantly different from constant, proceed with the following steps.
+
+2. Identify the patterns: monotone increasing, monotone decreasing, increasing then decreasing, etc. For patterns other than monotone changes, identify the position of the change points and proceed with the following steps.
+
+3. Obtain the fitted values and residuals from model 1. Permute the residuals, add back to the fitted values and refit the GAM to obtain the permuted pattern. If the permuted pattern is the same as the original pattern, record the position of the permuted change points, else ignore the whole permutation if the . Repeat the procedure 1000 times to get the confidence interval of change points.
+
+4. List all the change points in a sequential order. To test whether one change point occurs significantly earlier than the other, simply check whether there is overlap between the two confidence intervals. If there is no overlap, then one change point occurs significantly earlier than the other.
+
+#4 Exploratory Analysis
 Prices for four stocks in 2015.
 
 ![Prices for four stocks in 2015.](Stockprice.pdf)
+
+
