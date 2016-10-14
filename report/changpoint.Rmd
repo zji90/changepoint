@@ -8,6 +8,140 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r,echo=FALSE,message=FALSE}
+library(mgcv)
+library(ggplot2)
+library(gplots)
+library(grid)
+load("quandldata.rda")
+
+getdata <- function(stock) {
+      data <- quandldata[[stock]]
+      data <- data[data[,1] >= as.Date("2015-01-01") & data[,1] <=  as.Date("2015-1-31"),]
+      list(x=data$Date, y=data$Close)
+}
+
+changepointfunc <- function(x,y,simutime=100) {
+      n <- length(x)
+      predx <- seq(as.numeric(min(x)),as.numeric(max(x)),length.out=1000)
+      model <- mgcv::gam(y~s(as.numeric(x),k=3))
+      predy <- unlist(predict(model,data.frame(x=predx)))
+      rlevec <- rle(as.numeric(diff(predy) > 0))
+      if (length(rlevec$lengths) > 1) {
+            changepoint <- cumsum(rlevec$lengths)
+            changepoint <- changepoint[-length(changepoint)]
+            set.seed(12345)
+            permutechangepoint <- lapply(1:simutime,function(i) {
+                  permutey <- sample(resid(model)) + fitted(model)
+                  permutepredy <- unlist(predict(mgcv::gam(permutey~s(as.numeric(x),k=3)),data.frame(x=predx)))
+                  tmprlevec <- rle(as.numeric(diff(permutepredy) > 0))
+                  if (identical(tmprlevec$values,rlevec$values)) {
+                        tmpchangepoint <- cumsum(tmprlevec$lengths)
+                        tmpchangepoint[-length(tmpchangepoint)]      
+                  } else {
+                        NULL
+                  }
+            })
+            permutechangepoint <- permutechangepoint[sapply(permutechangepoint,length)==length(changepoint)]
+            if (length(permutechangepoint)/simutime < 0.75) {
+                  list(pattern="indefinite",data=data.frame(x=x,y=y),fitted=data.frame(x=predx,y=predy))
+            } else {
+                  pattern <- rlevec$values
+                  pattern[pattern==1] <- "increasing"
+                  pattern[pattern==0] <- "decreasing"
+                  changepointframe <- t(sapply(1:length(changepoint),function(i) {
+                        tmppoint <- sapply(permutechangepoint,function(j) j[i])
+                        c(changepoint[i],quantile(tmppoint,0.025),quantile(tmppoint,0.975))
+                  },USE.NAMES = F))
+                  dimnames(changepointframe) <- NULL
+                  changepointframe <- data.frame(changepoint=predx[changepointframe[,1]],lowerbound=predx[changepointframe[,2]],upperbound=predx[changepointframe[,3]])
+                  list(pattern=paste0(pattern,collapse = "_"),changepoint=changepointframe,data=data.frame(x=x,y=y),fitted=data.frame(x=predx,y=predy))
+            }
+      } else {
+            if (rlevec$values==1) {
+                  list(pattern="monotone increasing",data=data.frame(x=x,y=y),fitted=data.frame(x=predx,y=predy))
+            } else {
+                  list(pattern="monotone decreasing",data=data.frame(x=x,y=y),fitted=data.frame(x=predx,y=predy))
+            }
+      }
+}
+
+plotfunc <- function(fit, stock) {
+      fit$fitted$x <- as.Date(fit$fitted$x,origin = "1970-01-01")
+      p <- ggplot(aes(x=x,y=y),data=fit$data) + geom_point(size=2) + geom_line(aes(x=x,y=y),color="grey",size=1.5,data=fit$fitted) + ggtitle(bquote(atop(.(paste("Stock:",stock)), .(paste0("Pattern: ",fit$pattern)))))
+      if ("changepoint" %in% names(fit)) {
+            cp <- fit$changepoint
+            segdata <- NULL
+            middata <- NULL
+            for (i in 1:nrow(cp)) {
+                  tmpy <- fit$fitted$y[which.min(abs(cp[i,1]-as.numeric(fit$fitted$x)))]
+                  segdata <- rbind(segdata,c(cp[i,1],tmpy))
+                  middata <- rbind(middata,c(cp[i,2],cp[i,3],tmpy,tmpy))
+            }
+            segdata <- data.frame(x=as.Date(segdata[,1],origin="1970-01-01"),y=segdata[,2])
+            middata <- data.frame(x1=as.Date(middata[,1],origin="1970-01-01"),x2=as.Date(middata[,2],origin="1970-01-01"),y1=middata[,3],y2=middata[,4])
+            p <- p + geom_point(data=segdata,size=4,color="red") + geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2),data=middata,size=2,color="green")
+      }
+      p + theme(axis.line.x = element_line(colour = "black"),
+                axis.line.y = element_line(colour = "black"),
+                panel.grid.major = element_blank(),
+                panel.grid.minor = element_blank(),
+                panel.border = element_blank(),
+                panel.background = element_blank(),
+                axis.text.x = element_text(size=17,color='black'),
+                axis.text.y = element_text(size=17,color='black'),
+                axis.title.x = element_text(size=20,vjust=-1),
+                axis.title.y = element_text(size=20,vjust=1),
+                strip.text.y = element_text(size=17,color='black'),
+                plot.margin = unit(c(1,1,1,1), "cm")
+      ) + xlab("Date") + ylab("Price")
+}
+
+compareplot <- function(fitlist,stock) {
+      dataorder <- order(sapply(fitlist,function(i) i$changepoint[,1]))
+      fitlist <- fitlist[dataorder]
+      pooldata <- sapply(fitlist,function(i) i$fitted$y)
+      pooldata <- apply(pooldata,2,scale)
+      par(cex=1.5)
+      image(as.Date(fitlist[[1]]$fitted$x,origin="1970-01-01"),1:ncol(pooldata),pooldata,yaxt="n",col = bluered(100),xlab="Date",ylab="Stock")
+      axis(2, at=1:ncol(pooldata), labels=stock)
+      xpos <- sapply(fitlist,function(i) i$changepoint[,1])
+      points(y=1:ncol(pooldata),x=xpos,pch=19)
+      for (i in 1:ncol(pooldata)) {
+            lines(c(fitlist[[i]]$changepoint[,2],fitlist[[i]]$changepoint[,3]),c(i,i))
+      }
+}
+
+AXPdata <- getdata("AXP")
+AXPfit <- changepointfunc(AXPdata$x,AXPdata$y)
+AXPplot <- plotfunc(AXPfit,"AXP")
+PGdata <- getdata("PG")
+PGfit <- changepointfunc(PGdata$x,PGdata$y)
+PGplot <- plotfunc(PGfit,"PG")
+PFEdata <- getdata("PFE")
+PFEfit <- changepointfunc(PFEdata$x,PFEdata$y)
+PFEplot <- plotfunc(PFEfit,"PFE")
+GEdata <- getdata("GE")
+GEfit <- changepointfunc(GEdata$x,GEdata$y)
+GEplot <- plotfunc(GEfit,"GE")
+
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+      plots <- c(list(...), plotlist)
+      numPlots = length(plots)
+      if (is.null(layout)) {
+            layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                             ncol = cols, nrow = ceiling(numPlots/cols))
+      }
+      grid.newpage()
+      pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+      for (i in 1:numPlots) {
+            matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+            print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,layout.pos.col = matchidx$col))
+      }
+}
+
+```
+
 #1 Introductions
 
 Change point analysis has been widely applied to stock market data to detect the occurrence of significant changes in stock prices. Most of the current studies focus on developing rigorous statistical methods to identify change points for an individual stock. However, sometimes one needs to compare change points for multiple stocks to discover whether there is any relationship between the trends of different stocks. An easy-to-use method to identify and compare change points for multiple stocks is lacking. To address this problem, we aim to develop a systematic method to identify change points and their confidence intervals for multiple stocks. The change points will be listed in a sequential order and a statistical method will be developed to determine whether one change point occurs earlier than the other.
@@ -15,21 +149,38 @@ Change point analysis has been widely applied to stock market data to detect the
 
 #2 Data
 
-Simulated data will be used to test the validity of our methods. The methods will then be applied to a set of real stock market data. The data used in this study is the end of day prices for 30 US stock obtained from Quandl (https://www.quandl.com/data/EOD?filterSelection=sample&keyword=). 
+The data used in this study is the end of day prices for 4 US stock (American Express Company, AXP; Procter & Gamble Co., PG; Pfizer Inc., PFE; General Electric, GE) obtained from Quandl (https://www.quandl.com/data/EOD?filterSelection=sample&keyword=). To simplify the problem, only the stock prices in the January of 2015 are included.
 
-#3 Statistical Methods
+#3 Methods
 
-1. Fit a Generalized Additive Model (GAM, gam function in mgcv R package) with cubic smoothing splines. Perform a likelihood ratio test to determine whether the pattern is significantly different from constant (whether the gam model fits significantly better than a constant line). If the pattern is significantly different from constant, proceed with the following steps.
+For each stock, a smooth curve is first fitted to capture the temporal trend of the stock price. The pattern and potential change points are then identified. Finally, the confidence interval of the change points are obtained using a permutation method. The details of the methods are as follows:
 
-2. Identify the patterns: monotone increasing, monotone decreasing, increasing then decreasing, etc. For patterns other than monotone changes, identify the position of the change points and proceed with the following steps.
+1. Fit curve. Fit a Generalized Additive Model (GAM, gam function in mgcv R package) with cubic smoothing splines.
 
-3. Obtain the fitted values and residuals from model 1. Permute the residuals, add back to the fitted values and refit the GAM to obtain the permuted pattern. If the permuted pattern is the same as the original pattern, record the position of the permuted change points, else ignore the whole permutation if the . Repeat the procedure 1000 times to get the confidence interval of change points.
+2. Identify the pattern: monotone increasing, monotone decreasing, increasing then decreasing, etc. For patterns other than monotone changes, identify the position of the change points and proceed with the following steps. The change points are defined as the stationary points in this study.
 
-4. List all the change points in a sequential order. To test whether one change point occurs significantly earlier than the other, simply check whether there is overlap between the two confidence intervals. If there is no overlap, then one change point occurs significantly earlier than the other.
+3. Identify the confidence intervals of the change points. First obtain the fitted values and residuals from model 1. Then permute the residuals, add back to the fitted values and refit the GAM to obtain the permuted pattern. Repeat the procedure 1000 times and check how many times the permuted pattern agrees with the original pattern. If less than 75% of the permuted pattern agrees with original pattern, the pattern is changed to "indefinite". Otherwise for all the permutations where the permuted pattern is the same as the original pattern, record the position of the permuted change points. The confidence interval of the change point is defined by the 0.025 and 0.975 quantile of the permuted change points.
 
-#4 Exploratory Analysis
-Prices for four stocks in 2015.
+4. Compare change points. For a give set of data, list all the change points in a sequential order. To test whether one change point occurs significantly earlier than the other, simply check whether there is overlap between the two confidence intervals. If there is no overlap, then one change point occurs significantly earlier than the other.
 
-![Prices for four stocks in 2015.](Stockprice.pdf)
+#4 Results
 
+We first applied our method to detect the change points and their associated confidence intervals for the four stocks. The results are shown in Figure 1.
 
+```{r,echo=FALSE,fig.height=10,fig.width=12,cache=TRUE,fig.cap="Chang points and confidence intervals for the four stocks. Grey lines are the fitted GAM smooth curves. Red points are the detected change points. Green line segments are the confidence intervals for the change points."}
+multiplot(AXPplot,PGplot,PFEplot,GEplot,cols=2)
+```
+
+We can see that the temporal patterns and the change points of four prices are correctly identified. AXP shows a monotonically decreasing trend, GE shows a decreasing then increasing trend, and PFE and PG show increasing then decreasing trend.
+
+For the three stocks with change points (PFE, PG, and GE), we can further compare whether one change point occurs significantly earlier than the other by checking whether their confidence intervals overlap. Figure 2 is a heatmap combing the fitted values and the change points of the three stocks. We can clearly see that the change point of PG occurs significantly earlier than those of PFE and GE, while the change points of PFE and GE do not show clear temporal order.
+
+```{r,echo=FALSE,fig.height=8,fig.width=9,cache=TRUE,fig.cap="Heatmap showing the fitted values and the change points of the three stocks: PFE, PG, and GE. The change points and their confidence intervals are shown as black dots and line segments."}
+compareplot(list(PGfit,PFEfit,GEfit),c("PG","PFE","GE"))
+```
+
+#5 Discussions
+
+In this study we develop a systematic method to detect the change points and their confidence intervals for the stock market data. We are able to order the change points in a temporal order and check whether one change point occurs significantly earlier than the other by comparing the confidence intervals. A real data example shows the method works well.
+
+For now we are only considering comparing the change points in a fixed time window (i.e. January of 2015). In the future we need to consider multiple time windows (e.g. a sliding time window across the whole year) to see whether the observed temporal order of change points in one time window also frequently occurs in other time windows. This may provide important insights for investments: if the change point of stock A always occurs significantly earlier than that of stock B, by observing the trend of stock A we can predict the future trend of stock B and make investment decisions accordingly.
