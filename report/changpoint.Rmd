@@ -144,7 +144,7 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
 
 #1 Introductions
 
-Change point analysis has been widely applied to stock market data to detect the occurrence of significant changes in stock prices. Most of the current studies focus on developing rigorous statistical methods to identify change points for an individual stock. However, sometimes one needs to compare change points for multiple stocks to discover whether there is any relationship between the trends of different stocks. An easy-to-use method to identify and compare change points for multiple stocks is lacking. To address this problem, we aim to develop a systematic method to identify change points and their confidence intervals for multiple stocks. The change points will be listed in a sequential order and a statistical method will be developed to determine whether one change point occurs earlier than the other.
+Change point analysis has been widely applied to stock market data to detect the occurrence of significant changes in stock prices. In most cases, change point can be defined as the the time point where the stock price changes from increasing to decreasing or from decreasing to increasing. Accurate predictions of change points can provide great insights for making investment decisions. For example, one can buy in stock if the trend of stock price is predicted to change from decreasing to increasing in the near future. Most of the current studies focus on developing rigorous statistical methods to identify change points for an individual stock [Andrews, 1993; Bai, 1997; Chen and Gupta, 1997]. However, in many situations one needs to compare change points for multiple stocks to discover whether there is any relationship between the trends of different stocks. An easy-to-use method to identify and compare change points for multiple stocks is lacking. To address this problem, we aim to develop a systematic method to identify change points and their confidence intervals for multiple stocks. The change points will be listed in a sequential order and a statistical method will be developed to determine whether one change point occurs earlier than the other.
 
 
 #2 Data
@@ -184,3 +184,12 @@ compareplot(list(PGfit,PFEfit,GEfit),c("PG","PFE","GE"))
 In this study we develop a systematic method to detect the change points and their confidence intervals for the stock market data. We are able to order the change points in a temporal order and check whether one change point occurs significantly earlier than the other by comparing the confidence intervals. A real data example shows the method works well.
 
 For now we are only considering comparing the change points in a fixed time window (i.e. January of 2015). In the future we need to consider multiple time windows (e.g. a sliding time window across the whole year) to see whether the observed temporal order of change points in one time window also frequently occurs in other time windows. This may provide important insights for investments: if the change point of stock A always occurs significantly earlier than that of stock B, by observing the trend of stock A we can predict the future trend of stock B and make investment decisions accordingly.
+
+
+#References
+
+Andrews, Donald WK. Tests for parameter instability and structural change with unknown change point. Econometrica: Journal of the Econometric Society (1993): 821-856.
+
+Bai, Jushan. Estimation of a change point in multiple regression models. Review of Economics and Statistics 79.4 (1997): 551-563.
+
+Chen, Jie, and Arjun K. Gupta. Testing and locating variance changepoints with application to stock prices. Journal of the American Statistical Association 92.438 (1997): 739-747.
